@@ -1,0 +1,13 @@
+# OS
+.DS_Store
+
+# Personal skill extensions (never distribute)
+**/PERSONAL.md
+**/config.json
+
+# Update backups
+.update-backups/
+
+# Python (legacy, just in case)
+__pycache__/
+*.pyc
