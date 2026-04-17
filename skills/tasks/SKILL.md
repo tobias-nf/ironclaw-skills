@@ -70,9 +70,20 @@ Ask the user:
    - Production: `https://taskboard.commitment-tracker-aiops-sandbox.site` (default)
    - Dev: `https://dev.taskboard.commitment-tracker-aiops-sandbox.site`
    - Self-hosted: any URL
-2. **Digest channel** — which channel for daily digest? (default: current channel)
+2. **API key** — needed to sync with the Taskboard API.
+   - Format: `hive_sk_<agent-id>_<secret>`
+   - Get it from Taskboard Settings page or ask an admin
+   - Store via the credential system for the chosen host
+3. **Digest channel** — which channel for daily digest? (default: current channel)
 
-The API key is handled by the credential system — do not ask for it directly.
+### Step 2b: Verify API key
+
+Test the connection:
+```
+http(method="GET", url="{base_url}/api/v1/agents/me")
+```
+If this returns the agent profile → continue.
+If 401/403 → "API key is invalid. Check and try again." Stop.
 
 ### Step 3: Write workspace structure
 
