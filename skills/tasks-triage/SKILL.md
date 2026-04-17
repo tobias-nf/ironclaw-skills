@@ -1,5 +1,5 @@
 ---
-name: taskboard-standalone-triage
+name: taskboard-triage
 version: "1.0.0"
 description: Review task health — flag overdue, stale, and blocked tasks. Suggest follow-ups and resolutions. Cloud-only.
 activation:
@@ -22,7 +22,7 @@ activation:
     - health-check
   max_context_tokens: 1500
 requires:
-  skills: [taskboard-standalone]
+  skills: [taskboard]
 credentials:
   - name: taskboard_api_key
     provider: taskboard

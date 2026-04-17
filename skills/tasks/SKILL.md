@@ -1,7 +1,7 @@
 ---
 name: taskboard
 version: "1.0.0"
-description: Track tasks locally with background sync to Taskboard API. Replaces commitment-triage, commitment-digest, and commitment-setup.
+description: Task management via Taskboard REST API. Cloud-only, no local files, no sync. Simple and direct.
 activation:
   keywords:
     - need to
@@ -23,7 +23,7 @@ activation:
     - taskboard
     - action item
     - blocked
-    - setup taskboard
+    - subtask
   patterns:
     - "(?i)I (need|have|should|must|ought) to"
     - "(?i)(remind me|don't let me forget|make sure I)"
@@ -32,7 +32,6 @@ activation:
     - "(?i)(slack|email|dm|text) message from .+: .+"
   tags:
     - task-management
-    - commitments
     - personal-assistant
   max_context_tokens: 2000
 credentials:
@@ -46,277 +45,107 @@ credentials:
     setup_instructions: "Get your API key from Taskboard Settings or ask an admin. Format: hive_sk_<agent-id>_<secret>"
 ---
 
-# Taskboard — Local-First Task Management with Cloud Sync
+# Taskboard Standalone — Cloud-Only via HTTP
 
-Tasks are stored locally as markdown files in `tasks/` for instant response times. Background sync pushes to and pulls from the Taskboard REST API so tasks are visible in the dashboard, Slack, and to other agents.
-
-Local files are the fast path — write immediately, never block on API calls.
-The Taskboard API is the shared source of truth for team visibility.
-
----
+All task operations go directly to the Taskboard REST API. No local files, no sync, no workspace setup. Just HTTP calls.
 
 ## Setup
 
-When the user says "setup taskboard", "enable taskboard", or when this skill activates for the first time:
+When the user says "setup taskboard" or this skill activates for the first time:
 
-### Step 1: Check existing setup
-
-Call `memory_read(path="tasks/README.md")`. If it exists, tell the user: "Taskboard is already set up. Want me to reinstall from scratch?" Stop unless they confirm.
-
-### Step 2: Gather configuration
-
-Ask the user:
-1. **Taskboard URL** — which instance to sync with?
+1. Ask for the **Taskboard URL**:
    - Production: `https://taskboard.commitment-tracker-aiops-sandbox.site` (default)
    - Dev: `https://dev.taskboard.commitment-tracker-aiops-sandbox.site`
    - Self-hosted: any URL
-2. **API key** — needed to sync with the Taskboard API.
-   - Format: `hive_sk_<agent-id>_<secret>`
-   - Get it from Taskboard Settings page or ask an admin
-   - Store via the credential system for the chosen host
-3. **Digest channel** — which channel for daily digest? (default: current channel)
+2. Ask for the **API key** (format: `hive_sk_<agent-id>_<secret>`)
+3. Verify by calling:
+   ```
+   http(method="GET", url="{base_url}/api/v1/agents/me")
+   ```
+   If it returns the agent profile → continue. If 401/403 → "API key is invalid. Check and try again." Stop.
+4. Ask **how often to check for new tasks**:
+   - "Every hour" → `0 * * * *`
+   - "Every 2 hours during work hours" → `0 9,11,13,15,17 * * 1-5` (default)
+   - "Every 4 hours" → `0 */4 * * *`
+   - Custom cron expression
+5. Ask for **digest channel** (default: current channel)
 
-### Step 2b: Verify API key
-
-Test the connection:
-```
-http(method="GET", url="{base_url}/api/v1/agents/me")
-```
-If this returns the agent profile → continue.
-If 401/403 → "API key is invalid. Check and try again." Stop.
-
-### Step 3: Write workspace structure
-
-Write `tasks/README.md` with the configuration and schema:
-
-```
-memory_write(target="tasks/README.md", append=false, content="...")
-```
-
-Content for README.md:
-
-```markdown
-# Taskboard
-
-Local-first task tracking with cloud sync.
-
-## Config
-
-base_url: <user's chosen URL>
-digest_channel: <channel name>
-
-## Directory Layout
-
-- `open/` — Active tasks (one file each)
-- `resolved/` — Completed/cancelled tasks
-- `signals/pending/` — Extracted signals awaiting triage
-- `signals/expired/` — Dismissed signals
-- `sync.json` — Sync state and task_id mappings
-```
-
-Create directory placeholders:
-- `memory_write(target="tasks/open/README.md", content="Active tasks.", append=false)`
-- `memory_write(target="tasks/resolved/README.md", content="Resolved tasks.", append=false)`
-- `memory_write(target="tasks/signals/pending/README.md", content="Signals awaiting triage.", append=false)`
-- `memory_write(target="tasks/signals/expired/README.md", content="Expired signals.", append=false)`
-
-Write initial sync state:
-- `memory_write(target="tasks/sync.json", content='{"last_sync": null, "mappings": {}}', append=false)`
-
-### Step 4: Create missions
+### Create missions
 
 Check `mission_list` first — skip if already exists.
 
-**Triage mission** (twice daily):
+**Check for new tasks** (user-chosen frequency):
 ```
 mission_create(
-  name: "taskboard-triage",
-  goal: "Review pending signals and task status. (1) memory_tree('tasks/signals/pending/', depth=1) — for signals past expires_at or older than 48h, move to signals/expired/. (2) memory_tree('tasks/open/', depth=1) and memory_read each — flag overdue tasks, stale items. (3) If any items need attention, send a message to the user.",
-  cadence: "0 9,18 * * *"
+  name: "taskboard-check",
+  goal: "Check for new or updated tasks. (1) http(method='GET', url='<base_url>/api/v1/tasks/me') — compare with last check. (2) If there are new tasks assigned since last run, send a message: 'New task: **<title>** (<task_id>), priority: <priority>'. (3) If any task changed status, note it. (4) Store the current timestamp for next comparison.",
+  cadence: "<user's chosen cron>"
 )
 ```
 
-**Digest mission** (weekday mornings):
+**Digest** (weekday mornings):
 ```
 mission_create(
   name: "taskboard-digest",
-  goal: "Compose morning task digest. (1) Sync from cloud: http(method='GET', url='<base_url>/api/v1/tasks/me') and update local files. (2) memory_tree('tasks/open/', depth=1) and memory_read each. (3) Count pending signals. (4) Compose digest grouped by: Overdue first, Due This Week, In Progress, Pending. End with pending signal count. (5) Send via message tool.",
+  goal: "Morning task digest. (1) http(method='GET', url='<base_url>/api/v1/tasks/me') to get assigned tasks. (2) http(method='GET', url='<base_url>/api/v1/tasks/me/owed') to get tasks owed to me. (3) Group by: Overdue first, Due This Week, In Progress, Pending, Waiting On Others. (4) Send digest via message tool. End with 'Did I miss anything?'",
   cadence: "0 8 * * 1-5"
 )
 ```
 
-**Sync mission** (every 2 hours during work hours):
+**Triage** (twice daily):
 ```
 mission_create(
-  name: "taskboard-sync",
-  goal: "Sync tasks between local workspace and Taskboard API. Read tasks/README.md for base_url. (1) PULL: http(method='GET', url='<base_url>/api/v1/tasks/me') — for each cloud task, if local file exists and cloud is newer update it, if no local file create one in tasks/open/ with task_id pre-filled, if cloud status is completed/cancelled but local is open move to tasks/resolved/. (2) PUSH: memory_tree('tasks/open/', depth=1) and memory_read each — for tasks with task_id=null, create via http(method='POST', url='<base_url>/api/v1/tasks') and write task_id back. For tasks where local is newer than synced_at, update via http(method='PATCH', url='<base_url>/api/v1/tasks/{task_id}'). (3) Update tasks/sync.json with new mappings and last_sync timestamp. Do not send any message unless there are conflicts or errors.",
-  cadence: "0 9,11,13,15,17 * * 1-5"
+  name: "taskboard-triage",
+  goal: "Review task health. (1) http(method='GET', url='<base_url>/api/v1/tasks/me') — flag tasks that are overdue (deadline passed, not completed). (2) Flag tasks in_progress for more than 7 days without updates. (3) Flag blocked tasks. (4) If any items need attention, send a message to the user with a summary.",
+  cadence: "0 9,18 * * *"
 )
 ```
 
-### Step 5: Initial sync
-
-Pull existing tasks from the cloud:
-```
-http(method="GET", url="<base_url>/api/v1/tasks/me")
-```
-
-For each task returned, create a local file in `tasks/open/<slug>.md` with `task_id` pre-filled. Update `tasks/sync.json`.
-
-### Step 6: Confirm
+### Confirm
 
 Tell the user:
 
-> Taskboard is ready. Here's what I set up:
-> - Workspace structure under `tasks/`
-> - **Sync mission** runs every 2 hours (weekdays) — pushes local tasks to cloud, pulls cloud updates
-> - **Triage mission** runs twice daily (9am, 6pm) — flags overdue tasks, expires stale signals
-> - **Digest mission** runs weekday mornings at 8am — syncs from cloud and summarizes your tasks
-> - Pulled **N existing tasks** from the cloud
+> Taskboard is ready. Connected as **<agent-id>**.
+> - **Task check** runs <frequency> — notifies you of new or updated tasks
+> - **Triage** runs twice daily (9am, 6pm) — flags overdue and stale tasks
+> - **Digest** runs weekday mornings at 8am — full task summary
 >
-> I'll track obligations from our conversations automatically. Say **"my tasks"** to see your current status, or **"sync tasks"** to force a manual sync.
-
----
-
-## Workspace Layout
-
-```
-tasks/
-  open/           Active tasks (one file each)
-  resolved/       Completed/cancelled tasks (archived)
-  signals/        Raw extracted signals awaiting triage
-    pending/      Not yet promoted to tasks
-    expired/      Dismissed or expired signals
-  sync.json       Sync state (last sync timestamp, task_id mappings)
-  README.md       Config and schema reference
-```
-
-## Task File Schema (tasks/open/<slug>.md)
-
-```
----
-type: task
-status: pending | in_progress | blocked | review | completed | failed | cancelled
-priority: low | standard | urgent | emergency
-due: <YYYY-MM-DD> | null
-created_at: <YYYY-MM-DD>
-assigned_to: <agent-id> | null
-parent_slug: <parent-filename> | null
-task_id: <T-2026-XXXXX> | null
-synced_at: <ISO8601> | null
-tags: [<tag names>]
----
-# <Title>
-
-<Description — markdown.>
-```
-
-`task_id` is null until synced to cloud. Once synced, holds the Taskboard ID.
-
-## Signal File Schema (tasks/signals/pending/<slug>.md)
-
-```
----
-type: signal
-source_channel: <channel name>
-source_message: "<brief quote>"
-detected_at: <YYYY-MM-DD>
-immediacy: realtime | prompt | batch
-expires_at: <YYYY-MM-DD> | null
-confidence: high | medium | low
-obligation_type: reply | deliver | attend | review | decide | follow-up
-mentions: [<names>]
-destination: null | task | dismissed
-promoted_to: null | <task filename>
----
-<1-2 sentence description.>
-```
+> Say **"my tasks"** anytime to see your current status.
 
 ---
 
 ## Mode A: Passive Signal Detection
 
-When the user says something that implies an obligation but is NOT explicitly asking to track it — silently extract a signal.
+When the user says something implying an obligation but is NOT explicitly asking to track it.
 
-**Triggers:** "I need to...", "I promised Sarah...", "I should get back to...", "The report is due Friday"
+**Triggers:** "I need to...", "I promised Sarah...", "The report is due Friday"
 
-**Action:**
-1. Check duplicates: `memory_search` for key phrases within `tasks/`
-2. If no duplicate, `memory_write` to `tasks/signals/pending/<slug>.md`
-3. After the write: "I've tracked a task about [topic]."
+**Action:** Create a task directly:
+```
+http(method="POST", url="{base_url}/api/v1/tasks", body={
+  "title": "<concise title>",
+  "description": "<context from conversation>",
+  "priority": "<low|standard|urgent|emergency>",
+  "deadline": "<ISO8601 or omit>",
+  "tags": ["auto-detected"]
+})
+```
 
-Do NOT interrupt conversation. Signal extraction is a side-effect. Do NOT sync to cloud during this mode.
+After creation: "I've tracked a task: **<title>** (<task_id>)"
 
-**Immediacy:** realtime (production incidents) | prompt (named-person asks) | batch (most items)
+Do NOT interrupt conversation flow. Task creation is a side-effect.
+
+**Priority inference:**
+- `emergency`: due today, production impact
+- `urgent`: within 3 days, named-person ask
+- `standard`: within 2 weeks or no hard deadline (default)
+- `low`: no deadline, whenever
 
 ## Mode B: Explicit Task Creation
 
 User says: "track this", "create a task", "I need to do X by Friday".
 
 **Action:**
-1. Write directly to `tasks/open/<slug>.md`
-2. Infer defaults, ask only if truly ambiguous
-3. Confirm: "Tracked: [title], due [date], priority [level]."
-4. Sync: push to cloud (Mode F)
-
-**Priority:** emergency (today/overdue) | urgent (within 3 days) | standard (within 2 weeks) | low (no deadline)
-
-## Mode C: Task Updates and Resolution
-
-User says: "done with X", "mark T-2026-00042 done", "I'm blocked on the review".
-
-**Action:**
-1. Find task in `tasks/open/`
-2. Update status, move to `tasks/resolved/` if completed/cancelled
-3. Confirm: "Resolved: [title]."
-4. Sync: push status change to cloud
-
-## Mode D: Task Digest
-
-User asks: "show my tasks", "what's overdue?", "what's on my plate?"
-
-**Action:**
-1. Pull from cloud first (Mode F pull) for latest shared state
-2. Present grouped:
-
-```
-## Tasks — <today's date>
-
-### Overdue / Emergency
-- **<title>** (due <date>) — <status>
-
-### Due This Week
-- **<title>** (due <date>) — <status>
-
-### In Progress
-- **<title>** — <status>
-
-### Pending
-- **<title>** — priority: <priority>
-
-### Pending Signals (<count>)
-Say "review signals" to triage.
-```
-
-Omit empty sections. Zero tasks: "No open tasks. You're clear."
-
-## Mode E: Signal Triage
-
-User says "review signals" or "triage".
-
-1. List `tasks/signals/pending/`
-2. For each: actionable → create task in `tasks/open/`, not relevant → move to `signals/expired/`
-3. Sync promoted tasks to cloud
-
-## Mode F: Cloud Sync
-
-Read `tasks/README.md` for the `base_url`. Never block conversation. Run after Modes B, C, D, E. Never during Mode A.
-
-### Push (local → cloud)
-
-For tasks where `task_id` is null or local is newer than `synced_at`:
-
-**Create task:**
 ```
 http(method="POST", url="{base_url}/api/v1/tasks", body={
   "title": "...",
@@ -326,61 +155,113 @@ http(method="POST", url="{base_url}/api/v1/tasks", body={
   "assigned_to": "agent-id",
   "parent_id": "T-2026-XXXXX",
   "visibility": "public",
-  "tags": ["tag-name"]
+  "tags": ["tag1"]
 })
-→ {"id": "T-2026-00042", "title": "...", "status": "pending", ...}
 ```
 
-Write returned `task_id` back to local file. Update `tasks/sync.json`.
+To find assignees:
+```
+http(method="GET", url="{base_url}/api/v1/agents/me/assignable")
+```
 
-**Update task:**
+Confirm: "Created: **<title>** (<task_id>), priority: <priority>, due: <date>"
+
+## Mode C: Task Updates and Resolution
+
+User says: "done with X", "mark T-2026-00042 done", "I'm blocked".
+
+**Find the task:**
+- User gives task ID → get it directly
+- User describes it → search my tasks:
+  ```
+  http(method="GET", url="{base_url}/api/v1/tasks/me")
+  ```
+
+**Update:**
 ```
 http(method="PATCH", url="{base_url}/api/v1/tasks/{task_id}", body={
-  "status": "in_progress",
-  "priority": "urgent",
-  "description": "...",
-  "assigned_to": "agent-id",
-  "parent_id": "T-2026-XXXXX"
+  "status": "completed"
 })
 ```
 
-**Add comment:**
+**Add a comment:**
 ```
 http(method="POST", url="{base_url}/api/v1/tasks/{task_id}/activity", body={
-  "body": "Progress update: completed phase 1."
+  "body": "Done — reviewed and sent to legal."
 })
 ```
 
-### Pull (cloud → local)
+Confirm: "Resolved: **<title>** (<task_id>)"
 
+**Valid status transitions:**
+- pending → in_progress, completed, blocked, cancelled
+- in_progress → blocked, review, completed, failed, cancelled
+- blocked → in_progress, cancelled
+- review → completed, in_progress, cancelled
+
+## Mode D: Task Digest
+
+User asks: "show my tasks", "what's overdue?", "what's on my plate?"
+
+**Gather:**
 ```
 http(method="GET", url="{base_url}/api/v1/tasks/me")
-→ {"tasks": [...], "total": 15}
+http(method="GET", url="{base_url}/api/v1/tasks/me/owed")
 ```
 
-For each cloud task:
-- Has local file and cloud newer → update local
-- No local file → create in `tasks/open/` with `task_id` pre-filled
-- Cloud completed but local open → move to `tasks/resolved/`
+**Present grouped:**
 
-### Conflict: cloud wins.
+```
+## Tasks — <today's date>
 
-### sync.json
-```json
-{
-  "last_sync": "2026-04-17T10:00:00Z",
-  "mappings": {
-    "review-sarah-deck.md": "T-2026-00042",
-    "submit-q1-report.md": "T-2026-00043"
-  }
-}
+### Overdue / Emergency
+- **<title>** (<task_id>) — due <date>, <status>
+
+### Due This Week
+- **<title>** (<task_id>) — due <date>, <status>
+
+### In Progress
+- **<title>** (<task_id>) — <status>
+
+### Pending
+- **<title>** (<task_id>) — priority: <priority>
+
+### Waiting On Others (owed to me)
+- **<title>** (<task_id>) — assigned to <agent>, <status>
+
+---
+Did I miss anything?
+```
+
+Omit empty sections. Zero tasks: "No open tasks. You're clear."
+
+## Mode E: Task Detail
+
+User asks about a specific task: "tell me about T-2026-00042"
+
+```
+http(method="GET", url="{base_url}/api/v1/tasks/{task_id}")
+http(method="GET", url="{base_url}/api/v1/tasks/{task_id}/activity")
+http(method="GET", url="{base_url}/api/v1/tasks/{task_id}/tags")
+```
+
+Present: status, priority, assignee, deadline, description, recent activity.
+
+## Mode F: Browse and Search
+
+"show all tasks", "what tasks are blocked?", "tasks tagged legal"
+
+```
+http(method="GET", url="{base_url}/api/v1/tasks/visible?status=blocked")
+http(method="GET", url="{base_url}/api/v1/tasks/visible?tag=legal")
+http(method="GET", url="{base_url}/api/v1/tasks/visible?assigned_to=alice")
 ```
 
 ---
 
 ## Taskboard REST API Reference
 
-Base URL: read from `tasks/README.md` config (set during setup).
+Base URL: configured during setup.
 Auth: credentials are injected automatically — never construct Authorization headers.
 
 ### Task Object
@@ -407,7 +288,7 @@ Auth: credentials are injected automatically — never construct Authorization h
 **Statuses:** draft, pending, in_progress, blocked, review, completed, failed, cancelled
 **Priorities:** low, standard, urgent, emergency
 **Visibility:** public (default), private
-**Valid transitions:** pending → in_progress/completed/blocked/cancelled. in_progress → blocked/review/completed/failed/cancelled. blocked → in_progress/cancelled. review → completed/in_progress/cancelled.
+**Subtasks:** set parent_id. Visibility inherited from parent.
 
 ### Agent Object
 
@@ -420,8 +301,6 @@ Auth: credentials are injected automatically — never construct Authorization h
   "active": true
 }
 ```
-
-**Types:** user, service, admin
 
 ### Endpoints
 
@@ -440,7 +319,7 @@ Auth: credentials are injected automatically — never construct Authorization h
 
 **Create fields:** title (required), description, assigned_to, priority, deadline, parent_id, visibility, tags[]
 **Update fields:** title, description, status, priority, deadline, assigned_to, parent_id, visibility
-**Query params:** status, priority, tag, assigned_to, sort, limit, offset
+**Query params:** status (comma-separated), priority, tag, assigned_to, sort, limit, offset
 
 #### Activity
 
@@ -494,11 +373,3 @@ Reference types: origin, related, blocks, depends_on, output
 | GET | /agents/me/assignable | Active agents for assignment |
 | GET | /agents | List all |
 | GET | /agents/{id} | Get detail |
-
----
-
-## Filename Conventions
-
-Slugify: lowercase, hyphens, no special chars, max 50 chars.
-- "Review Sarah's deck" → `review-sarah-deck.md`
-- "Submit Q1 tax filing" → `submit-q1-tax-filing.md`

@@ -1,51 +1,43 @@
-# IronClaw Skills
+# IronClaw Skills for Taskboard
 
-Two IronClaw skills for task management with local-first storage and cloud sync to the Taskboard API.
+[IronClaw](https://github.com/nearai/ironclaw) skills for task management via the [Taskboard](https://github.com/tobias-nf/taskboard) API.
 
 ## Skills
 
-| File | Skill | Description |
-|------|-------|-------------|
-| `SKILL.md` | `taskboard` | Core task management — signal detection, task CRUD, digest, cloud sync |
-| `MEETINGS.md` | `taskboard-meetings` | Meeting transcript → action items → deduplicated tasks with approval |
+| Skill | Description |
+|-------|-------------|
+| `tasks` | Core task management — create, update, list, digest, triage |
+| `tasks-digest` | Morning task summary with follow-up suggestions |
+| `tasks-triage` | Health check — overdue, stale, blocked, priority mismatches |
+| `meetings` | Meeting transcript → deduplicated tasks with approval |
+| `email-to-tasks` | Extract tasks from emails (paste or Gmail API) |
+| `enterprise-update` | Auto-update skills from this repo |
 
-## Relationship to IronClaw Skills
+## Relationship to IronClaw
 
-This skill is designed for [IronClaw](https://github.com/nearai/ironclaw), an AI agent framework. It replaces the three existing commitment tracking skills:
+These skills replace the built-in commitment tracking skills in IronClaw:
 
-- [`commitment-setup`](https://github.com/nearai/ironclaw/tree/staging/skills/commitment-setup) — workspace initialization and mission creation
-- [`commitment-triage`](https://github.com/nearai/ironclaw/tree/staging/skills/commitment-triage) — passive signal detection and explicit task capture
-- [`commitment-digest`](https://github.com/nearai/ironclaw/tree/staging/skills/commitment-digest) — daily summaries and status reports
+- [`commitment-setup`](https://github.com/nearai/ironclaw/tree/staging/skills/commitment-setup)
+- [`commitment-triage`](https://github.com/nearai/ironclaw/tree/staging/skills/commitment-triage)
+- [`commitment-digest`](https://github.com/nearai/ironclaw/tree/staging/skills/commitment-digest)
 
-The taskboard skill merges all three into a single skill backed by a cloud API, while keeping local-first performance for signal detection. Remove the commitment-* skills after installing this one.
+Remove the commitment-* skills after installing these.
 
-See all available IronClaw skills: https://github.com/nearai/ironclaw/tree/staging/skills
+See all IronClaw skills: https://github.com/nearai/ironclaw/tree/staging/skills
 
 ## Install
 
-Copy both skills to your IronClaw skills directory:
+Copy skills to your IronClaw skills directory:
 ```bash
-cp SKILL.md /path/to/ironclaw/skills/taskboard/SKILL.md
-cp MEETINGS.md /path/to/ironclaw/skills/taskboard-meetings/SKILL.md
+for skill in tasks tasks-digest tasks-triage meetings email-to-tasks enterprise-update; do
+  mkdir -p /path/to/ironclaw/skills/$skill
+  cp skills/$skill/SKILL.md /path/to/ironclaw/skills/$skill/SKILL.md
+done
 ```
 
-Then say "setup taskboard" to initialize. The setup flow will:
-1. Ask for your Taskboard instance URL (prod/dev/self-hosted)
-2. Create the local workspace structure (`tasks/`)
-3. Install triage and digest missions
-4. Pull existing tasks from the cloud
-
-## How it works
-
-- **Local files** in `tasks/` for instant response (zero API latency on signal detection)
-- **Background sync** pushes to / pulls from Taskboard REST API after task mutations
-- **Direct HTTP calls** — full API reference embedded in the skill file
-- **Cloud wins** on conflicts — Taskboard has the multi-user truth
-- **Missions** run automatically: triage (twice daily), digest (weekday mornings)
+Then say "setup taskboard" to configure the API connection.
 
 ## API Key
 
 Get your key from the Taskboard dashboard (Settings) or ask an admin.
 Format: `hive_sk_<agent-id>_<secret>`
-
-The key is managed by IronClaw's credential system — the skill never sees it directly.

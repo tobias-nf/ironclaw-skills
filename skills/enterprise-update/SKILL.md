@@ -95,9 +95,9 @@ Display a table:
 
 ```
 Skill                    Local     Repo      Status
-tasks-standalone         1.0.0     1.0.0     ✓ up to date
-tasks-standalone-digest  —         1.0.0     ✨ new
-meetings-standalone      1.0.0     1.1.0     ⬆ update available
+tasks                    1.0.0     1.0.0     ✓ up to date
+tasks-digest             —         1.0.0     ✨ new
+meetings                 1.0.0     1.1.0     ⬆ update available
 ```
 
 ### 2. Update a Skill
@@ -127,10 +127,10 @@ rm -rf $TMPDIR
 
 #### Report
 ```
-✓ tasks-standalone: 1.0.0 → 1.1.0
-✓ meetings-standalone: 1.0.0 → 1.1.0
+✓ tasks: 1.0.0 → 1.1.0
+✓ meetings: 1.0.0 → 1.1.0
 ⏭ enterprise-update: 2.1.0 (up to date)
-✨ tasks-standalone-triage: installed (new)
+✨ tasks-triage: installed (new)
 ```
 
 ### 3. Install New Skill
@@ -159,13 +159,10 @@ Skills in `tobias-nf/ironclaw-skills`:
 
 | Skill | Description |
 |-------|-------------|
-| `tasks` | Task management with local-first sync |
-| `tasks-standalone` | Task management, cloud-only via HTTP |
-| `tasks-standalone-digest` | Morning task summary |
-| `tasks-standalone-triage` | Task health check |
-| `tasks-mcp` | Task management via MCP |
-| `meetings` | Meeting transcript processing with local sync |
-| `meetings-standalone` | Meeting transcript processing, cloud-only |
+| `tasks` | Task management via Taskboard API |
+| `tasks-digest` | Morning task summary |
+| `tasks-triage` | Task health check — overdue, stale, blocked |
+| `meetings` | Meeting transcript → deduplicated tasks |
 | `email-to-tasks` | Extract tasks from emails (paste or Gmail API) |
 | `enterprise-update` | This skill — updates from the repo |
 

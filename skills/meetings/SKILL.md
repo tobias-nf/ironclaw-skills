@@ -1,7 +1,7 @@
 ---
 name: taskboard-meetings
 version: "1.0.0"
-description: Process meeting transcripts — extract action items, match to existing Taskboard tasks, deduplicate, and create new tasks after user approval.
+description: Process meeting transcripts — extract action items, deduplicate against cloud tasks, create new tasks after approval. Cloud-only, no local files.
 activation:
   keywords: [meeting, transcript, meeting notes, action items, meeting summary, process meeting, meeting recap]
   patterns: ["(?i)process.*(meeting|transcript)", "(?i)(meeting|call).*(notes|recap|summary)", "(?i)extract.*(action items|tasks).*(meeting|transcript)", "(?i)(here is|here's|I have).*(transcript|meeting notes)"]
@@ -20,9 +20,9 @@ credentials:
     setup_instructions: "Same API key as the taskboard skill."
 ---
 
-# Taskboard Meetings — Transcript to Tasks
+# Meetings Standalone — Transcript to Tasks (Cloud-Only)
 
-Parses meeting transcripts, extracts action items, deduplicates against existing Taskboard tasks, and creates new tasks after user approval. Nothing is pushed to the cloud until the user confirms.
+Parses meeting transcripts, extracts action items, deduplicates against existing Taskboard tasks via the REST API, and creates new tasks after user approval. No local files — everything goes directly to the cloud.
 
 ## When to Use
 
@@ -39,36 +39,25 @@ Parses meeting transcripts, extracts action items, deduplicates against existing
 - **Multi-part messages:** wait for all parts, concatenate, then process as one
 - **Ask for title + date** if not obvious from the transcript
 
-### Step 2: Check for duplicates
+### Step 2: Gather existing tasks for dedup
 
-Compute SHA-256 of the transcript text. Read `meetings/processed.json`:
-
-```json
-{"processed": ["sha256hash1", "sha256hash2"]}
-```
-
-If the hash exists → "Already processed this transcript." Stop.
-Initialize as `{"processed": []}` if the file doesn't exist.
-
-### Step 3: Gather existing tasks for dedup
-
-Pull from both local and cloud:
-
-1. **Local:** `memory_tree("tasks/open/", depth=1)` + `memory_read` each file
-2. **Cloud:** Read `tasks/README.md` for `base_url`, then:
+Fetch from the cloud:
 ```
 http(method="GET", url="{base_url}/api/v1/tasks/me?limit=200")
 http(method="GET", url="{base_url}/api/v1/tasks/me/owed?limit=200")
 ```
-
-Build a combined list of current tasks (local + cloud, deduplicated by `task_id`). This is your dedup context.
 
 Also fetch the agent list for matching people to agents:
 ```
 http(method="GET", url="{base_url}/api/v1/agents/me/assignable")
 ```
 
-### Step 4: Parse the transcript
+And get the current user's identity:
+```
+http(method="GET", url="{base_url}/api/v1/agents/me")
+```
+
+### Step 3: Parse the transcript
 
 Extract structured action items. Include the current task list and agent list in your parsing context so you can flag matches and resolve assignees.
 
@@ -102,17 +91,17 @@ Output JSON:
 - **`context`**: capture the WHY, not just a restatement of the title. Include what was discussed, what decision was made, who raised it.
 - **`owner_type`**:
   - `mine` — the user must do this
-  - `waiting_on` — someone else owes this to the user (create as task owed_to the user)
+  - `waiting_on` — someone else owes this to the user
   - `irrelevant` — not actionable for the user, skip
 - **`assigned_to`**: match attendee names/emails to agent IDs from the assignable agents list. If no match, leave null.
-- **`owed_to`**: for `waiting_on` items, set to the user's agent ID (the user is the stakeholder).
-- **`person_resolved`**: true if the related_person matched a Taskboard agent, false if external/unknown. When false and `owner_type: waiting_on`, create the task assigned to the user with title "Waiting: <person> to <thing>" and tag `waiting-on`.
-- **`existing_task_id`**: if a current task covers the same work, set its ID. The action item will update that task instead of creating a duplicate.
-- **`match_reason`**: when matching to an existing task, explain why (e.g. "Existing task T-2026-00042 already tracks the partnership agreement review")
-- **`priority`**: infer from urgency cues in the transcript. "By end of week" → urgent. "When you get a chance" → low. Default: standard.
+- **`owed_to`**: for `waiting_on` items, set to the user's agent ID.
+- **`person_resolved`**: true if the related_person matched a Taskboard agent, false if external/unknown.
+- **`existing_task_id`**: if a current task covers the same work, set its ID to update instead of duplicating
+- **`match_reason`**: explain why it matches (e.g. "Existing task T-2026-00042 already tracks the partnership agreement review")
+- **`priority`**: "By end of week" → urgent. "When you get a chance" → low. Default: standard.
 - **`tags`**: 1-3 reusable labels (e.g. "legal", "engineering", "compliance")
 
-### Step 5: Present summary for approval
+### Step 4: Present summary for approval
 
 Show the user a summary before creating anything:
 
@@ -129,7 +118,10 @@ Show the user a summary before creating anything:
 1. **<title>** — assigned to <agent>, priority: <priority>, due: <date>
    _<context>_
 
-2. **<title>** — waiting on <person>, owed to you
+2. **<title>** — waiting on <person> (Taskboard agent), owed to you
+   _<context>_
+
+3. **Waiting: <person> to <deliver thing>** — waiting on <person> (external, not in Taskboard), assigned to you
    _<context>_
 
 #### Updates to Existing Tasks
@@ -146,15 +138,14 @@ Approve all? Or tell me which to change/skip. (e.g. "skip 2, change 1 priority t
 
 **Wait for user approval.** Do NOT create or push anything until the user confirms.
 
-### Step 6: Process approved items
+### Step 5: Process approved items
 
 After approval, for each approved action item:
 
 **New tasks (`existing_task_id` is null):**
 
-**Case 1: `mine` or `waiting_on` with resolved agent:**
-1. Write to `tasks/open/<slug>.md` locally with `task_id: null`
-2. Push to cloud:
+**Case 1: `owner_type: mine` or `waiting_on` with resolved agent:**
+1. Create task:
 ```
 http(method="POST", url="{base_url}/api/v1/tasks", body={
   "title": "...",
@@ -166,8 +157,7 @@ http(method="POST", url="{base_url}/api/v1/tasks", body={
   "visibility": "private"
 })
 ```
-3. Write returned `task_id` back to local file
-4. If `waiting_on` with resolved agent, add owed_to:
+2. If `waiting_on` with resolved agent, add owed_to:
 ```
 http(method="POST", url="{base_url}/api/v1/tasks/{task_id}/owed-to", body={
   "agent_id": "<user's agent-id>"
@@ -175,8 +165,7 @@ http(method="POST", url="{base_url}/api/v1/tasks/{task_id}/owed-to", body={
 ```
 
 **Case 2: `waiting_on` with unresolved person (not in Taskboard):**
-1. Write to `tasks/open/waiting-<person-slug>-<thing-slug>.md` locally
-2. Push to cloud assigned to the user:
+1. Create task assigned to the user (you are tracking it):
 ```
 http(method="POST", url="{base_url}/api/v1/tasks", body={
   "title": "Waiting: <person> to <deliver thing>",
@@ -188,7 +177,7 @@ http(method="POST", url="{base_url}/api/v1/tasks", body={
   "visibility": "private"
 })
 ```
-3. Write returned `task_id` back to local file
+No owed_to call needed — the task is yours, tracking someone external.
 
 **For both cases**, add meeting reference:
 ```
@@ -200,7 +189,7 @@ http(method="POST", url="{base_url}/api/v1/tasks/{task_id}/references", body={
 ```
 
 **Updates to existing tasks (`existing_task_id` is set):**
-1. Add a comment with the new context:
+1. Update description with meeting context:
 ```
 http(method="PATCH", url="{base_url}/api/v1/tasks/{existing_task_id}", body={
   "description": "<existing description>\n\n**Meeting update:** <meeting title> (<date>)\n<context>"
@@ -213,46 +202,16 @@ http(method="PATCH", url="{base_url}/api/v1/tasks/{existing_task_id}", body={
   "deadline": "<new deadline>"
 })
 ```
-3. Update the local file if it exists
 
-### Step 7: Save meeting record
-
-Write `meetings/<date>-<slug>.md`:
-```markdown
----
-date: YYYY-MM-DD
-title: "Meeting title"
-attendees: [Name1, Name2]
-tasks_created: ["T-2026-00050", "T-2026-00051"]
-tasks_updated: ["T-2026-00042"]
----
-
-## Summary
-<meeting summary>
-
-## Action Items
-- [x] <title> → T-2026-00050 (created)
-- [x] <title> → T-2026-00042 (updated)
-- [ ] <skipped item> (irrelevant)
-```
-
-### Step 8: Save hash
-
-Append the SHA-256 hash to `meetings/processed.json`.
-
-### Step 9: Update sync state
-
-Update `tasks/sync.json` with new mappings for created tasks.
-
-### Step 10: Confirm
+### Step 6: Confirm
 
 ```
 Meeting processed:
-- **N new tasks** created and synced to Taskboard
+- **N new tasks** created in Taskboard
 - **N existing tasks** updated with meeting context
 - **N items** skipped
 
-All tasks are visible in the Taskboard dashboard and will appear in your next digest.
+All tasks are visible in the Taskboard dashboard.
 ```
 
 ---
@@ -260,10 +219,10 @@ All tasks are visible in the Taskboard dashboard and will appear in your next di
 ## Edge Cases
 
 - **No action items found:** "No action items detected in this transcript. Want me to look again with different criteria?"
-- **All items match existing tasks:** "All action items from this meeting are already tracked. I've added meeting context to N existing tasks."
+- **All items match existing tasks:** "All action items are already tracked. I've added meeting context to N existing tasks."
 - **Unknown attendees for `mine` tasks:** "Could not match 'Sarah' to a Taskboard agent. Created task unassigned."
-- **Unknown attendees for `waiting_on` tasks:** Created as "Waiting: Sarah to ..." assigned to you with `waiting-on` tag.
-- **Ambiguous ownership:** When it's unclear who should own a task, default to `owner_type: mine` and let the user reassign.
+- **Unknown attendees for `waiting_on` tasks:** Created as "Waiting: Sarah to ..." assigned to you with `waiting-on` tag. Shows up in your task list and triage.
+- **Ambiguous ownership:** Default to `owner_type: mine` and let the user reassign.
 
 ## Personal Extensions
 

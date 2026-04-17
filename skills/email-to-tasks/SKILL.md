@@ -24,7 +24,7 @@ activation:
     - inbox
   max_context_tokens: 2000
 requires:
-  skills: [taskboard-standalone]
+  skills: [taskboard]
 credentials:
   - name: taskboard_api_key
     provider: taskboard
@@ -33,7 +33,7 @@ credentials:
     hosts:
       - "taskboard.commitment-tracker-aiops-sandbox.site"
       - "dev.taskboard.commitment-tracker-aiops-sandbox.site"
-    setup_instructions: "Same API key as the taskboard-standalone skill."
+    setup_instructions: "Same API key as the taskboard skill."
   - name: google_token
     provider: google
     location:
@@ -164,7 +164,7 @@ Approve all? Or tell me which to change/skip.
 
 ### Step 4: Create tasks
 
-For approved items, same logic as meetings-standalone:
+For approved items, same logic as meetings skill:
 
 **`mine` or `waiting_on` with resolved agent:**
 ```
