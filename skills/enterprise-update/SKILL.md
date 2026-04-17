@@ -1,10 +1,10 @@
 ---
 name: enterprise-update
-version: 2.0.0
-description: Pull and apply skill updates from tobias-nf/ironclaw-skills on GitHub.
+version: 2.1.0
+description: Pull and apply skill updates from tobias-nf/ironclaw-skills on GitHub. Supports scheduled auto-check.
 activation:
-  keywords: [update skills, check for updates, skill updates, what's new, install skill]
-  patterns: ["(?i)check.*(skill).*(update|version)", "(?i)update.*(skill)", "(?i)(install|add).*(new skill)"]
+  keywords: [update skills, check for updates, skill updates, what's new, install skill, setup updates]
+  patterns: ["(?i)check.*(skill).*(update|version)", "(?i)update.*(skill)", "(?i)(install|add).*(new skill)", "(?i)setup.*(update|skill)"]
   tags: [skills, updates, maintenance]
   max_context_tokens: 2000
 ---
@@ -18,10 +18,56 @@ Fetch skill updates from `https://github.com/tobias-nf/ironclaw-skills` (branch:
 
 ---
 
+## Setup
+
+When the user says "setup updates", "enable auto-updates", or first time this skill runs:
+
+1. Ask **how often to check for updates**:
+   - "Daily at 9am" → `0 9 * * *` (default)
+   - "Twice a day" → `0 9,17 * * *`
+   - "Weekly on Monday" → `0 9 * * 1`
+   - Custom cron
+2. Ask **auto-apply or notify only**:
+   - **Notify only** (default) — message the user when updates are available, wait for approval
+   - **Auto-apply** — automatically update skills, notify afterwards
+
+### Create mission
+
+Check `mission_list` first — skip if `skill-update-check` already exists.
+
+**Notify only:**
+```
+mission_create(
+  name: "skill-update-check",
+  goal: "Check for skill updates. (1) Clone tobias-nf/ironclaw-skills to temp dir. (2) Compare version: in each SKILL.md against local installed versions. (3) If any updates or new skills are available, send a message listing them with ⬆ for updates and ✨ for new. (4) Clean up temp dir. Stay silent if everything is up to date.",
+  cadence: "<user's chosen cron>"
+)
+```
+
+**Auto-apply:**
+```
+mission_create(
+  name: "skill-update-check",
+  goal: "Check for and apply skill updates. (1) Clone tobias-nf/ironclaw-skills to temp dir. (2) Compare versions. (3) For each outdated skill: backup config.json and PERSONAL.md, rsync updated files. (4) For new skills: install if no unmet dependencies. (5) Send a message summarizing what was updated. (6) Clean up temp dir. Stay silent if everything is up to date.",
+  cadence: "<user's chosen cron>"
+)
+```
+
+### Confirm
+
+> Skill update check configured:
+> - **Schedule:** <frequency>
+> - **Mode:** <notify only / auto-apply>
+>
+> Say **"check for updates"** anytime for a manual check.
+
+---
+
 ## When to use
 
 - User says "check for updates", "update skills", "what's new"
-- First-time install of a skill from the repo
+- Scheduled mission fires
+- First-time install of a new skill from the repo
 
 ---
 
@@ -83,7 +129,7 @@ rm -rf $TMPDIR
 ```
 ✓ tasks-standalone: 1.0.0 → 1.1.0
 ✓ meetings-standalone: 1.0.0 → 1.1.0
-⏭ enterprise-update: 2.0.0 (up to date)
+⏭ enterprise-update: 2.1.0 (up to date)
 ✨ tasks-standalone-triage: installed (new)
 ```
 
@@ -120,6 +166,7 @@ Skills in `tobias-nf/ironclaw-skills`:
 | `tasks-mcp` | Task management via MCP |
 | `meetings` | Meeting transcript processing with local sync |
 | `meetings-standalone` | Meeting transcript processing, cloud-only |
+| `email-to-tasks` | Extract tasks from emails (paste or Gmail API) |
 | `enterprise-update` | This skill — updates from the repo |
 
 ## Quick Reference
@@ -130,3 +177,4 @@ Skills in `tobias-nf/ironclaw-skills`:
 | Update skill | Backup personal data → rsync from clone → clean up |
 | New skill | Check dependencies → copy → prompt for credentials |
 | Rollback | Restore from `.update-backups/<skill>/<timestamp>/` |
+| Setup auto-check | Create `skill-update-check` mission with chosen cron |
