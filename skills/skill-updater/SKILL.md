@@ -164,6 +164,7 @@ Skills in `tobias-nf/ironclaw-skills`:
 | `tasks-triage` | Task health check — overdue, stale, blocked |
 | `meetings` | Meeting transcript → deduplicated tasks |
 | `email-to-tasks` | Extract tasks from emails (paste or Gmail API) |
+| `bug-report` | Create bug reports for IronClaw devs with chat history |
 | `skill-updater` | This skill — updates from the repo |
 
 ## Quick Reference
