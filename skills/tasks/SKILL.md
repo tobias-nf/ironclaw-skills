@@ -145,6 +145,15 @@ mission_create(
 )
 ```
 
+**Sync mission** (every 2 hours during work hours):
+```
+mission_create(
+  name: "taskboard-sync",
+  goal: "Sync tasks between local workspace and Taskboard API. Read tasks/README.md for base_url. (1) PULL: http(method='GET', url='<base_url>/api/v1/tasks/me') — for each cloud task, if local file exists and cloud is newer update it, if no local file create one in tasks/open/ with task_id pre-filled, if cloud status is completed/cancelled but local is open move to tasks/resolved/. (2) PUSH: memory_tree('tasks/open/', depth=1) and memory_read each — for tasks with task_id=null, create via http(method='POST', url='<base_url>/api/v1/tasks') and write task_id back. For tasks where local is newer than synced_at, update via http(method='PATCH', url='<base_url>/api/v1/tasks/{task_id}'). (3) Update tasks/sync.json with new mappings and last_sync timestamp. Do not send any message unless there are conflicts or errors.",
+  cadence: "0 9,11,13,15,17 * * 1-5"
+)
+```
+
 ### Step 5: Initial sync
 
 Pull existing tasks from the cloud:
@@ -160,11 +169,12 @@ Tell the user:
 
 > Taskboard is ready. Here's what I set up:
 > - Workspace structure under `tasks/`
+> - **Sync mission** runs every 2 hours (weekdays) — pushes local tasks to cloud, pulls cloud updates
 > - **Triage mission** runs twice daily (9am, 6pm) — flags overdue tasks, expires stale signals
 > - **Digest mission** runs weekday mornings at 8am — syncs from cloud and summarizes your tasks
 > - Pulled **N existing tasks** from the cloud
 >
-> I'll track obligations from our conversations automatically. Say **"my tasks"** to see your current status, or **"sync tasks"** to force a cloud sync.
+> I'll track obligations from our conversations automatically. Say **"my tasks"** to see your current status, or **"sync tasks"** to force a manual sync.
 
 ---
 
