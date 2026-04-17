@@ -1,6 +1,6 @@
 ---
-name: enterprise-update
-version: 2.1.0
+name: skill-updater
+version: 3.0.0
 description: Pull and apply skill updates from tobias-nf/ironclaw-skills on GitHub. Supports scheduled auto-check.
 activation:
   keywords: [update skills, check for updates, skill updates, what's new, install skill, setup updates]
@@ -129,7 +129,7 @@ rm -rf $TMPDIR
 ```
 ✓ tasks: 1.0.0 → 1.1.0
 ✓ meetings: 1.0.0 → 1.1.0
-⏭ enterprise-update: 2.1.0 (up to date)
+⏭ skill-updater: 3.0.0 (up to date)
 ✨ tasks-triage: installed (new)
 ```
 
@@ -164,7 +164,7 @@ Skills in `tobias-nf/ironclaw-skills`:
 | `tasks-triage` | Task health check — overdue, stale, blocked |
 | `meetings` | Meeting transcript → deduplicated tasks |
 | `email-to-tasks` | Extract tasks from emails (paste or Gmail API) |
-| `enterprise-update` | This skill — updates from the repo |
+| `skill-updater` | This skill — updates from the repo |
 
 ## Quick Reference
 

@@ -11,7 +11,7 @@
 | `tasks-triage` | Health check — overdue, stale, blocked, priority mismatches |
 | `meetings` | Meeting transcript → deduplicated tasks with approval |
 | `email-to-tasks` | Extract tasks from emails (paste or Gmail API) |
-| `enterprise-update` | Auto-update skills from this repo |
+| `skill-updater` | Auto-update skills from this repo |
 
 ## Relationship to IronClaw
 
@@ -29,7 +29,7 @@ See all IronClaw skills: https://github.com/nearai/ironclaw/tree/staging/skills
 
 Copy skills to your IronClaw skills directory:
 ```bash
-for skill in tasks tasks-digest tasks-triage meetings email-to-tasks enterprise-update; do
+for skill in tasks tasks-digest tasks-triage meetings email-to-tasks skill-updater; do
   mkdir -p /path/to/ironclaw/skills/$skill
   cp skills/$skill/SKILL.md /path/to/ironclaw/skills/$skill/SKILL.md
 done

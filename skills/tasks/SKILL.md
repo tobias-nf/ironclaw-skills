@@ -1,6 +1,6 @@
 ---
-name: taskboard
-version: "1.0.0"
+name: tasks
+version: "1.1.0"
 description: Task management via Taskboard REST API. Cloud-only, no local files, no sync. Simple and direct.
 activation:
   keywords:
@@ -20,7 +20,7 @@ activation:
     - my tasks
     - what's overdue
     - task
-    - taskboard
+    - tasks
     - action item
     - blocked
     - subtask
@@ -51,7 +51,7 @@ All task operations go directly to the Taskboard REST API. No local files, no sy
 
 ## Setup
 
-When the user says "setup taskboard" or this skill activates for the first time:
+When the user says "setup tasks" or this skill activates for the first time:
 
 1. Ask for the **Taskboard URL**:
    - Production: `https://taskboard.commitment-tracker-aiops-sandbox.site` (default)
@@ -77,7 +77,7 @@ Check `mission_list` first — skip if already exists.
 **Check for new tasks** (user-chosen frequency):
 ```
 mission_create(
-  name: "taskboard-check",
+  name: "tasks-check",
   goal: "Check for new or updated tasks. (1) http(method='GET', url='<base_url>/api/v1/tasks/me') — compare with last check. (2) If there are new tasks assigned since last run, send a message: 'New task: **<title>** (<task_id>), priority: <priority>'. (3) If any task changed status, note it. (4) Store the current timestamp for next comparison.",
   cadence: "<user's chosen cron>"
 )
@@ -86,7 +86,7 @@ mission_create(
 **Digest** (weekday mornings):
 ```
 mission_create(
-  name: "taskboard-digest",
+  name: "tasks-digest",
   goal: "Morning task digest. (1) http(method='GET', url='<base_url>/api/v1/tasks/me') to get assigned tasks. (2) http(method='GET', url='<base_url>/api/v1/tasks/me/owed') to get tasks owed to me. (3) Group by: Overdue first, Due This Week, In Progress, Pending, Waiting On Others. (4) Send digest via message tool. End with 'Did I miss anything?'",
   cadence: "0 8 * * 1-5"
 )
@@ -95,7 +95,7 @@ mission_create(
 **Triage** (twice daily):
 ```
 mission_create(
-  name: "taskboard-triage",
+  name: "tasks-triage",
   goal: "Review task health. (1) http(method='GET', url='<base_url>/api/v1/tasks/me') — flag tasks that are overdue (deadline passed, not completed). (2) Flag tasks in_progress for more than 7 days without updates. (3) Flag blocked tasks. (4) If any items need attention, send a message to the user with a summary.",
   cadence: "0 9,18 * * *"
 )

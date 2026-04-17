@@ -1,6 +1,6 @@
 ---
-name: taskboard-digest
-version: "1.0.0"
+name: tasks-digest
+version: "1.1.0"
 description: Compose and deliver task summaries from Taskboard API. Cloud-only — no local files.
 activation:
   keywords:
@@ -25,7 +25,7 @@ activation:
     - reporting
   max_context_tokens: 1500
 requires:
-  skills: [taskboard]
+  skills: [tasks]
 credentials:
   - name: taskboard_api_key
     provider: taskboard
@@ -51,7 +51,7 @@ http(method="GET", url="{base_url}/api/v1/tasks/me/created?limit=200")
 http(method="GET", url="{base_url}/api/v1/agents/me")
 ```
 
-Read `base_url` from the taskboard skill's stored config.
+Read `base_url` from the tasks skill's stored config.
 
 ## Composing the digest
 

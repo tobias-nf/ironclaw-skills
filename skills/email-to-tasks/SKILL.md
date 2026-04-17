@@ -1,6 +1,6 @@
 ---
 name: email-to-tasks
-version: "1.0.0"
+version: "1.1.0"
 description: Extract tasks and action items from emails. Supports pasted emails, Gmail API, and periodic inbox scanning.
 activation:
   keywords:
@@ -24,7 +24,7 @@ activation:
     - inbox
   max_context_tokens: 2000
 requires:
-  skills: [taskboard]
+  skills: [tasks]
 credentials:
   - name: taskboard_api_key
     provider: taskboard
@@ -33,7 +33,7 @@ credentials:
     hosts:
       - "taskboard.commitment-tracker-aiops-sandbox.site"
       - "dev.taskboard.commitment-tracker-aiops-sandbox.site"
-    setup_instructions: "Same API key as the taskboard skill."
+    setup_instructions: "Same API key as the tasks skill."
   - name: google_token
     provider: google
     location:

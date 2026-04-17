@@ -1,6 +1,6 @@
 ---
-name: taskboard-meetings
-version: "1.0.0"
+name: meetings
+version: "1.1.0"
 description: Process meeting transcripts — extract action items, deduplicate against cloud tasks, create new tasks after approval. Cloud-only, no local files.
 activation:
   keywords: [meeting, transcript, meeting notes, action items, meeting summary, process meeting, meeting recap]
@@ -8,7 +8,7 @@ activation:
   tags: [meetings, transcripts, action-items]
   max_context_tokens: 2000
 requires:
-  skills: [taskboard]
+  skills: [tasks]
 credentials:
   - name: taskboard_api_key
     provider: taskboard
@@ -17,7 +17,7 @@ credentials:
     hosts:
       - "taskboard.commitment-tracker-aiops-sandbox.site"
       - "dev.taskboard.commitment-tracker-aiops-sandbox.site"
-    setup_instructions: "Same API key as the taskboard skill."
+    setup_instructions: "Same API key as the tasks skill."
 ---
 
 # Meetings Standalone — Transcript to Tasks (Cloud-Only)

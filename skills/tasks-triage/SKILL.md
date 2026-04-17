@@ -1,6 +1,6 @@
 ---
-name: taskboard-triage
-version: "1.0.0"
+name: tasks-triage
+version: "1.1.0"
 description: Review task health — flag overdue, stale, and blocked tasks. Suggest follow-ups and resolutions. Cloud-only.
 activation:
   keywords:
@@ -22,7 +22,7 @@ activation:
     - health-check
   max_context_tokens: 1500
 requires:
-  skills: [taskboard]
+  skills: [tasks]
 credentials:
   - name: taskboard_api_key
     provider: taskboard
@@ -35,7 +35,7 @@ credentials:
 
 # Task Triage — Cloud-Only
 
-Review task health, flag problems, and suggest actions. Used both in-conversation (user asks "triage my tasks") and by the `taskboard-triage` mission for scheduled runs.
+Review task health, flag problems, and suggest actions. Used both in-conversation (user asks "triage my tasks") and by the `tasks-triage` mission for scheduled runs.
 
 ## Gathering data
 
