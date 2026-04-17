@@ -62,10 +62,55 @@ When the user says "setup taskboard" or this skill activates for the first time:
    ```
    http(method="GET", url="{base_url}/api/v1/agents/me")
    ```
-   If it returns the agent profile → "Connected as **<agent-id>**. Ready."
-   If 401/403 → "API key is invalid. Check and try again."
+   If it returns the agent profile → continue. If 401/403 → "API key is invalid. Check and try again." Stop.
+4. Ask **how often to check for new tasks**:
+   - "Every hour" → `0 * * * *`
+   - "Every 2 hours during work hours" → `0 9,11,13,15,17 * * 1-5` (default)
+   - "Every 4 hours" → `0 */4 * * *`
+   - Custom cron expression
+5. Ask for **digest channel** (default: current channel)
 
-Store the base URL for later use. The API key is managed by the credential system.
+### Create missions
+
+Check `mission_list` first — skip if already exists.
+
+**Check for new tasks** (user-chosen frequency):
+```
+mission_create(
+  name: "taskboard-check",
+  goal: "Check for new or updated tasks. (1) http(method='GET', url='<base_url>/api/v1/tasks/me') — compare with last check. (2) If there are new tasks assigned since last run, send a message: 'New task: **<title>** (<task_id>), priority: <priority>'. (3) If any task changed status, note it. (4) Store the current timestamp for next comparison.",
+  cadence: "<user's chosen cron>"
+)
+```
+
+**Digest** (weekday mornings):
+```
+mission_create(
+  name: "taskboard-digest",
+  goal: "Morning task digest. (1) http(method='GET', url='<base_url>/api/v1/tasks/me') to get assigned tasks. (2) http(method='GET', url='<base_url>/api/v1/tasks/me/owed') to get tasks owed to me. (3) Group by: Overdue first, Due This Week, In Progress, Pending, Waiting On Others. (4) Send digest via message tool. End with 'Did I miss anything?'",
+  cadence: "0 8 * * 1-5"
+)
+```
+
+**Triage** (twice daily):
+```
+mission_create(
+  name: "taskboard-triage",
+  goal: "Review task health. (1) http(method='GET', url='<base_url>/api/v1/tasks/me') — flag tasks that are overdue (deadline passed, not completed). (2) Flag tasks in_progress for more than 7 days without updates. (3) Flag blocked tasks. (4) If any items need attention, send a message to the user with a summary.",
+  cadence: "0 9,18 * * *"
+)
+```
+
+### Confirm
+
+Tell the user:
+
+> Taskboard is ready. Connected as **<agent-id>**.
+> - **Task check** runs <frequency> — notifies you of new or updated tasks
+> - **Triage** runs twice daily (9am, 6pm) — flags overdue and stale tasks
+> - **Digest** runs weekday mornings at 8am — full task summary
+>
+> Say **"my tasks"** anytime to see your current status.
 
 ---
 
