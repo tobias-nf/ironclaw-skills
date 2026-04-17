@@ -94,7 +94,8 @@ Output JSON:
   - `waiting_on` — someone else owes this to the user
   - `irrelevant` — not actionable for the user, skip
 - **`assigned_to`**: match attendee names/emails to agent IDs from the assignable agents list. If no match, leave null.
-- **`owed_to`**: for `waiting_on` items, set to the user's agent ID
+- **`owed_to`**: for `waiting_on` items, set to the user's agent ID.
+- **`person_resolved`**: true if the related_person matched a Taskboard agent, false if external/unknown.
 - **`existing_task_id`**: if a current task covers the same work, set its ID to update instead of duplicating
 - **`match_reason`**: explain why it matches (e.g. "Existing task T-2026-00042 already tracks the partnership agreement review")
 - **`priority`**: "By end of week" → urgent. "When you get a chance" → low. Default: standard.
@@ -117,7 +118,10 @@ Show the user a summary before creating anything:
 1. **<title>** — assigned to <agent>, priority: <priority>, due: <date>
    _<context>_
 
-2. **<title>** — waiting on <person>, owed to you
+2. **<title>** — waiting on <person> (Taskboard agent), owed to you
+   _<context>_
+
+3. **Waiting: <person> to <deliver thing>** — waiting on <person> (external, not in Taskboard), assigned to you
    _<context>_
 
 #### Updates to Existing Tasks
@@ -139,6 +143,8 @@ Approve all? Or tell me which to change/skip. (e.g. "skip 2, change 1 priority t
 After approval, for each approved action item:
 
 **New tasks (`existing_task_id` is null):**
+
+**Case 1: `owner_type: mine` or `waiting_on` with resolved agent:**
 1. Create task:
 ```
 http(method="POST", url="{base_url}/api/v1/tasks", body={
@@ -151,13 +157,29 @@ http(method="POST", url="{base_url}/api/v1/tasks", body={
   "visibility": "private"
 })
 ```
-2. If `owner_type` is `waiting_on`, add owed_to:
+2. If `waiting_on` with resolved agent, add owed_to:
 ```
 http(method="POST", url="{base_url}/api/v1/tasks/{task_id}/owed-to", body={
   "agent_id": "<user's agent-id>"
 })
 ```
-3. Add meeting reference:
+
+**Case 2: `waiting_on` with unresolved person (not in Taskboard):**
+1. Create task assigned to the user (you are tracking it):
+```
+http(method="POST", url="{base_url}/api/v1/tasks", body={
+  "title": "Waiting: <person> to <deliver thing>",
+  "description": "**From meeting:** <meeting title> (<date>)\n\n<context>\n\n**Waiting on:** <person> (external — not a Taskboard agent)",
+  "assigned_to": "<user's agent-id>",
+  "priority": "<priority>",
+  "deadline": "<due_date>T00:00:00Z",
+  "tags": ["meeting-action-item", "waiting-on"],
+  "visibility": "private"
+})
+```
+No owed_to call needed — the task is yours, tracking someone external.
+
+**For both cases**, add meeting reference:
 ```
 http(method="POST", url="{base_url}/api/v1/tasks/{task_id}/references", body={
   "type": "origin",
@@ -198,7 +220,8 @@ All tasks are visible in the Taskboard dashboard.
 
 - **No action items found:** "No action items detected in this transcript. Want me to look again with different criteria?"
 - **All items match existing tasks:** "All action items are already tracked. I've added meeting context to N existing tasks."
-- **Unknown attendees:** "Could not match 'Sarah' to a Taskboard agent. Created task unassigned."
+- **Unknown attendees for `mine` tasks:** "Could not match 'Sarah' to a Taskboard agent. Created task unassigned."
+- **Unknown attendees for `waiting_on` tasks:** Created as "Waiting: Sarah to ..." assigned to you with `waiting-on` tag. Shows up in your task list and triage.
 - **Ambiguous ownership:** Default to `owner_type: mine` and let the user reassign.
 
 ## Personal Extensions

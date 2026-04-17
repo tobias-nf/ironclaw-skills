@@ -105,7 +105,8 @@ Output JSON:
   - `waiting_on` — someone else owes this to the user (create as task owed_to the user)
   - `irrelevant` — not actionable for the user, skip
 - **`assigned_to`**: match attendee names/emails to agent IDs from the assignable agents list. If no match, leave null.
-- **`owed_to`**: for `waiting_on` items, set to the user's agent ID (the user is the stakeholder)
+- **`owed_to`**: for `waiting_on` items, set to the user's agent ID (the user is the stakeholder).
+- **`person_resolved`**: true if the related_person matched a Taskboard agent, false if external/unknown. When false and `owner_type: waiting_on`, create the task assigned to the user with title "Waiting: <person> to <thing>" and tag `waiting-on`.
 - **`existing_task_id`**: if a current task covers the same work, set its ID. The action item will update that task instead of creating a duplicate.
 - **`match_reason`**: when matching to an existing task, explain why (e.g. "Existing task T-2026-00042 already tracks the partnership agreement review")
 - **`priority`**: infer from urgency cues in the transcript. "By end of week" → urgent. "When you get a chance" → low. Default: standard.
@@ -150,6 +151,8 @@ Approve all? Or tell me which to change/skip. (e.g. "skip 2, change 1 priority t
 After approval, for each approved action item:
 
 **New tasks (`existing_task_id` is null):**
+
+**Case 1: `mine` or `waiting_on` with resolved agent:**
 1. Write to `tasks/open/<slug>.md` locally with `task_id: null`
 2. Push to cloud:
 ```
@@ -164,13 +167,30 @@ http(method="POST", url="{base_url}/api/v1/tasks", body={
 })
 ```
 3. Write returned `task_id` back to local file
-4. If `owner_type` is `waiting_on`, add owed_to:
+4. If `waiting_on` with resolved agent, add owed_to:
 ```
 http(method="POST", url="{base_url}/api/v1/tasks/{task_id}/owed-to", body={
   "agent_id": "<user's agent-id>"
 })
 ```
-5. Add meeting reference:
+
+**Case 2: `waiting_on` with unresolved person (not in Taskboard):**
+1. Write to `tasks/open/waiting-<person-slug>-<thing-slug>.md` locally
+2. Push to cloud assigned to the user:
+```
+http(method="POST", url="{base_url}/api/v1/tasks", body={
+  "title": "Waiting: <person> to <deliver thing>",
+  "description": "**From meeting:** <meeting title> (<date>)\n\n<context>\n\n**Waiting on:** <person> (external — not a Taskboard agent)",
+  "assigned_to": "<user's agent-id>",
+  "priority": "<priority>",
+  "deadline": "<due_date>T00:00:00Z",
+  "tags": ["meeting-action-item", "waiting-on"],
+  "visibility": "private"
+})
+```
+3. Write returned `task_id` back to local file
+
+**For both cases**, add meeting reference:
 ```
 http(method="POST", url="{base_url}/api/v1/tasks/{task_id}/references", body={
   "type": "origin",
@@ -241,7 +261,8 @@ All tasks are visible in the Taskboard dashboard and will appear in your next di
 
 - **No action items found:** "No action items detected in this transcript. Want me to look again with different criteria?"
 - **All items match existing tasks:** "All action items from this meeting are already tracked. I've added meeting context to N existing tasks."
-- **Unknown attendees:** If a person mentioned in the transcript doesn't match any agent, note it: "Could not match 'Sarah' to a Taskboard agent. Created task unassigned."
+- **Unknown attendees for `mine` tasks:** "Could not match 'Sarah' to a Taskboard agent. Created task unassigned."
+- **Unknown attendees for `waiting_on` tasks:** Created as "Waiting: Sarah to ..." assigned to you with `waiting-on` tag.
 - **Ambiguous ownership:** When it's unclear who should own a task, default to `owner_type: mine` and let the user reassign.
 
 ## Personal Extensions
